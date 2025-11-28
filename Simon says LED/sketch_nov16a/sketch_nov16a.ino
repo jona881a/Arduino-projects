@@ -1,115 +1,141 @@
-int numbGuess = 0;
-int neededGuesses = 4; //Start runde med 4 gæt
+const int MAX_ROUNDS = 5;
+const int MAX_GUESSES = 10;
 
-int LEDPins[4] = {13,12,7,4};
-int ButtonPins[4] = {A0,A1,A2,A3};
-int tones[4] = {262,294,330,349};
-int guesses[neededGuesses];
-int randomLEDCombination[neededGuesses];
-int selectedRandNums[neededGuesses];
+int gameRound = 1;
+int neededGuesses = 4;  //Start runde med 4 gæt
+int numGuess = 0;
 bool correctComb = false;
+int PZpin = 8; 
+
+int LEDPins[4] = { 13, 12, 7, 4 };
+int ButtonPins[4] = { A0, A1, A2, A3 };
+int tones[4] = { 262, 294, 330, 349 };
+
+int guesses[MAX_GUESSES];
+int randomLEDCombination[MAX_GUESSES];
+int selectedRandNums[MAX_GUESSES];
 
 void setup() {
 
   Serial.begin(9600);
-  
-  //Sørger for at random starter på et tilfældig sted efter reset
-  randomSeed(analogRead(0));
 
   //Sætter de analog pins til knapperne til PULLUP så de konstant giver 1 og 0 når der trykkes
-  for(int i = 0; i < 4; i++) {
+  for (int i = 0; i < 4; i++) {
     pinMode(ButtonPins[i], INPUT_PULLUP);
   }
 
-  //Genere den første sekvens til LED´erne
-  generateRandomSequence();
-
-  //initiering af første runde
-  for(int i = 0; i < neededGuesses; i++){
-    int LEDnum = randomLEDCombination[i];
-    int ToneNum = selectedRandNums[i];
-    /*
-    Serial.print("LED pin: ");
-    Serial.println(LEDnum);
-    Serial.print("Tone: ");
-    Serial.println(tones[ToneNum]);
-    */
-    digitalWrite(LEDnum, HIGH);
-    //tone(8, tones[ToneNum]);
-    delay(1000);
-    digitalWrite(LEDnum, LOW);
-    //noTone(8);
-    
+  //Sætter digitalpins som tænder LED'erne til OUTPUT da den pr. default opfatter dem som input og kan give nogle uhensigtsmæssigheder
+  for (int i = 0; i < 4; i++) {
+    pinMode(LEDPins[i], OUTPUT);
   }
 }
 
 void loop() {
-  int buttonValue;
 
-  while(neededGuesses != 0) {
-    int GreenBtn = analogRead(A0);
-    int YellowBtn = analogRead(A1);
-    int RedBtn = analogRead(A2);
-    int BlueBtn = analogRead(A3);
+  if (gameRound < MAX_ROUNDS) {
+    createRound();  //Viser LED'er og spiller tonen så runden er sat
 
-    if(GreenBtn > 1000) {
-      guessBtn(0); //Grøn LED
-      neededGuesses--;
+    while (numGuess != neededGuesses) {
+      int GreenBtn = analogRead(A0);
+      int YellowBtn = analogRead(A1);
+      int RedBtn = analogRead(A2);
+      int BlueBtn = analogRead(A3);
 
-    } else if(YellowBtn > 1000) {
-      guessBtn(1);; //Gul LED
-      neededGuesses--;
+      if (GreenBtn > 1000) {
+        guessBtn(0);  //Grøn LED
+        numGuess++;
 
-    } else if(RedBtn > 1000) {
-      guessBtn(2); //Rød LED
-      neededGuesses--;
+      } else if (YellowBtn > 1000) {
+        guessBtn(1);  //Gul LED
+        numGuess++;
 
-    } else if(BlueBtn > 1000) {
-      guessBtn(3); //Blå LED
-      neededGuesses--;
+      } else if (RedBtn > 1000) {
+        guessBtn(2);  //Rød LED
+        numGuess++;
 
+      } else if (BlueBtn > 1000) {
+        guessBtn(3);  //Blå LED
+        numGuess++;
+      }
     }
+
+    checkCorrectCombination();
+
+    if (correctComb == true) {
+      Serial.println("You won!!");
+      nextRound(); //Resetter arrays mm.
+      //victoryFlash();
+    }
+  } else {
+    Serial.println("GAME OVER");
+    resetGuesses();
+    numGuess = 0;
+    Serial.println("Resetting round");
   }
 
-  printArray(guesses, neededGuesses);
+}  //LOOP BLOCK END
 
-  checkCorrectCombination();
-  
-  if(correctComb == true) {
-    Serial.println("You won!!");
-    //victoryFlash();
+void createRound() {
+  //Genere tilfældig sammensætning af LED'er baseret på hvor mange gæt der skal til i runden (MAX_GUESSES)
+  generateRandomSequence();
+
+  //Her spilles toner og vises LED'er i den valgte rækkefølge for brugeren
+  for (int i = 0; i < neededGuesses; i++) {
+    int LEDnum = randomLEDCombination[i];
+    int ToneNum = selectedRandNums[i];
+    digitalWrite(LEDnum, HIGH);
+    //tone(PZPin, tones[ToneNum]);
+    delay(1000);
+    digitalWrite(LEDnum, LOW);
+    //noTone(PZPin);
   }
+}
+/*Nulstiller gæt og tilføjer et ekstra gæt til den kommende runde*/
+void nextRound() {
+  correctComb = false;
+  gameRound++;
+  neededGuesses++; //Antallet af gæt krævet stiger hver runde klaret
+  numGuess = 0;
+  resetGuesses(); //Resetter guesses arrayet så alle pladser er 0 igen
+  Serial.print("Runde: ");
+  Serial.println(gameRound);
 
-} //LOOP BLOCK END
+  Serial.print("Guesses required: ");
+  Serial.println(neededGuesses);
+} //nextRound END
 
+void resetGuesses() {
+    for (int i = 0; i < MAX_GUESSES; i++) {
+        guesses[i] = 0;
+    }
+} // resetGuesses END
 
 void guessBtn(int LED) {
-  printArray(guesses, neededGuesses);
-  guesses[numbGuess] = LEDPins[LED];
+  printArray(guesses, MAX_GUESSES);
+  guesses[numGuess] = LEDPins[LED];
 
-  Serial.print("Selected LED: ");
+  Serial.print("LED: ");
   Serial.println(LEDPins[LED]);
 
   Serial.print("Guess: ");
-  Serial.println(guesses[numbGuess]);
+  Serial.println(guesses[numGuess]);
 
   digitalWrite(LEDPins[LED], HIGH);
-  //tone(8, tones[LED]);
+  //tone(PZpin, tones[LED]);
   delay(1000);
   digitalWrite(LEDPins[LED], LOW);
-  //noTone(8);
-  numbGuess++;
-} //guessBtn END
+  //noTone(PZpin);
+}  //guessBtn END
 
 
 void checkCorrectCombination() {
   int correctGuesses = 0;
-  
-  for(int i = 0; i < neededGuesses; i++) {
+
+  for (int i = 0; i < neededGuesses; i++) {
     Serial.print("Gæt: ");
     Serial.println(guesses[i]);
     Serial.println();
-    if(guesses[i] == randomLEDCombination[i]) {
+    if (guesses[i] == randomLEDCombination[i]) {
       correctGuesses++;
       Serial.print("Correct guess!: ");
       Serial.println(guesses[i]);
@@ -123,28 +149,33 @@ void checkCorrectCombination() {
     }
   }
 
-  if(correctGuesses == neededGuesses) {
+  if (correctGuesses == neededGuesses) {
     correctComb = true;
   }
-} // checkCorrectCombination END
+}  // checkCorrectCombination END
 
 
-void generateRandomSequence () {
+void generateRandomSequence() {
+  //Sørger for at random starter på et tilfældig sted efter reset
+  randomSeed(analogRead(0));
+
   int randomNum;
 
   //Giver 4 tilfældige pins som der skal displayes og gemmes til verifikation
-  for(int i = 0; i < neededGuesses; i++) {
-    randomNum = random(0,neededGuesses);
+  for (int i = 0; i < neededGuesses; i++) {
+    randomNum = random(0, 4);
 
-    Serial.print("Number chosen: ");
-    Serial.println(randomNum);
-
-    selectedRandNums[i] = randomNum; //Til brug af toner
-    randomLEDCombination[i] = LEDPins[randomNum];
-    
+    selectedRandNums[i] = randomNum;  //Til brug af toner
+    randomLEDCombination[i] = LEDPins[randomNum]; //Henter LEDpin nummeret på gættets plads
   }
-} // generateRandomSequence END
 
+  Serial.println("Combination chosen: ");
+  printArray(selectedRandNums, neededGuesses);
+}  // generateRandomSequence END
+
+
+
+//BRUGES KUN TIL DEBUGGING
 void printArray(int arr[], int size) {
   Serial.print("[");
   for (int i = 0; i < size; i++) {
@@ -154,4 +185,4 @@ void printArray(int arr[], int size) {
     }
   }
   Serial.println("]");
-} // printArray END
+}  // printArray END
